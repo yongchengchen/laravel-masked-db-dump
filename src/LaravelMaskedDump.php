@@ -2,10 +2,11 @@
 
 namespace BeyondCode\LaravelMaskedDumper;
 
+use BeyondCode\LaravelMaskedDumper\TableDefinitions\TableDefinition;
+use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Schema\Schema;
 use Illuminate\Console\OutputStyle;
-use BeyondCode\LaravelMaskedDumper\TableDefinitions\TableDefinition;
 
 class LaravelMaskedDump
 {
@@ -21,30 +22,26 @@ class LaravelMaskedDump
         $this->output = $output;
     }
 
-    public function dump()
+    public function dump(Closure $writer)
     {
         $tables = $this->definition->getDumpTables();
-
-        $query = '';
 
         $overallTableProgress = $this->output->createProgressBar(count($tables));
 
         foreach ($tables as $tableName => $table) {
-            $query .= "DROP TABLE IF EXISTS `$tableName`;" . PHP_EOL;
-            $query .= $this->dumpSchema($table);
+            $writer("DROP TABLE IF EXISTS `$tableName`;" . PHP_EOL);
+            $writer($this->dumpSchema($table));
 
             if ($table->shouldDumpData()) {
-                $query .= $this->lockTable($tableName);
+                $writer($this->lockTable($tableName));
 
-                $query .= $this->dumpTableData($table);
+                $writer($this->dumpTableData($table));
 
-                $query .= $this->unlockTable($tableName);
+                $writer($this->unlockTable($tableName));
             }
 
             $overallTableProgress->advance();
         }
-
-        return $query;
     }
 
     protected function transformResultForInsert($row, TableDefinition $table)
@@ -100,7 +97,7 @@ class LaravelMaskedDump
 
         $queryBuilder->get()
             ->each(function ($row, $index) use ($table, &$query) {
-                $row = $this->transformResultForInsert((array)$row, $table);
+                $row = $this->transformResultForInsert((array) $row, $table);
                 $tableName = $table->getDoctrineTable()->getName();
 
                 $query .= "INSERT INTO `${tableName}` (`" . implode('`, `', array_keys($row)) . '`) VALUES ';
