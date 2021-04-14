@@ -16,6 +16,8 @@ class LaravelMaskedDump
     /** @var OutputStyle */
     protected $output;
 
+    protected $firstRow;
+
     public function __construct(DumpSchema $definition, OutputStyle $output)
     {
         $this->definition = $definition;
@@ -94,22 +96,25 @@ class LaravelMaskedDump
 
         $table->modifyQuery($queryBuilder);
         $tableName = $table->getDoctrineTable()->getName();
-        $queryBuilder->chunkById(500, function ($chunk) use ($table, $writer, $tableName) {
-            foreach ($chunk as $item) {
-                $row = $this->transformResultForInsert((array) $item, $table);
-                $writer("INSERT INTO `${tableName}` (`" . implode('`, `', array_keys($row)) . '`) VALUES (');
-
-                $firstColumn = true;
-                foreach ($row as $value) {
-                    if (!$firstColumn) {
-                        $writer(", ");
+        if ($queryBuilder->exists()) {
+            $writer("INSERT INTO `${tableName}` VALUES");
+            $this->firstRow = true;
+            $queryBuilder->chunkById(500, function ($chunk) use ($table, $writer) {
+                foreach ($chunk as $item) {
+                    $row = $this->transformResultForInsert((array) $item, $table);
+                    if (!$this->firstRow) {
+                        $writer(",");
+                    } else {
+                        $this->firstRow = false;
                     }
-                    $writer($value);
-                    $firstColumn = false;
+                    $writer("(");
+                    $writer(implode(',', array_values($row)));
+                    $writer(")");
                 }
-                $writer(");" . PHP_EOL);
-            }
-        }, $this->getPrimary($table->getDoctrineTable()));
+            }, $this->getPrimary($table->getDoctrineTable()));
+
+            $writer(';' . PHP_EOL);
+        }
     }
 
     protected function getPrimary($table)
