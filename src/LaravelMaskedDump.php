@@ -94,8 +94,8 @@ class LaravelMaskedDump
 
         $table->modifyQuery($queryBuilder);
 
-        $queryBuilder->get()
-            ->each(function ($row, $index) use ($table, &$query, $writer) {
+        $queryBuilder->chunk(500, function ($collection) use ($table, $writer) {
+            foreach ($collection as $row) {
                 $row = $this->transformResultForInsert((array) $row, $table);
                 $tableName = $table->getDoctrineTable()->getName();
 
@@ -110,6 +110,7 @@ class LaravelMaskedDump
                     $firstColumn = false;
                 }
                 $writer(");" . PHP_EOL);
-            });
+            }
+        });
     }
 }
