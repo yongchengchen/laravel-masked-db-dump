@@ -5,6 +5,7 @@ namespace BeyondCode\LaravelMaskedDumper;
 use BeyondCode\LaravelMaskedDumper\TableDefinitions\TableDefinition;
 use Closure;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\MySqlPlatform;
 use Doctrine\DBAL\Schema\Schema;
 use Illuminate\Console\OutputStyle;
 
@@ -17,11 +18,18 @@ class LaravelMaskedDump
     protected $output;
 
     protected $firstRow;
+    protected $useMysqldump;
 
     public function __construct(DumpSchema $definition, OutputStyle $output)
     {
+        $this->useMysqldump = true; //env('USE_MYSQLDUMP')
         $this->definition = $definition;
         $this->output = $output;
+
+        if ($this->useMysqldump) {
+            $platform = $this->definition->getConnection()->getDoctrineSchemaManager()->getDatabasePlatform();
+            $this->useMysqldump = $platform instanceof MysqlPlatform;
+        }
     }
 
     public function dump(Closure $writer)
@@ -30,9 +38,15 @@ class LaravelMaskedDump
 
         $overallTableProgress = $this->output->createProgressBar(count($tables));
 
+        if ($this->useMysqldump) {
+            $this->dumpDBSchemaViaMysqldump();
+        }
+
         foreach ($tables as $tableName => $table) {
-            $writer("DROP TABLE IF EXISTS `$tableName`;" . PHP_EOL);
-            $writer($this->dumpSchema($table));
+            if (!$this->useMysqldump) {
+                $writer("DROP TABLE IF EXISTS `$tableName`;" . PHP_EOL);
+                $writer($this->dumpSchema($table));
+            }
 
             if ($table->shouldDumpData()) {
                 $writer($this->lockTable($tableName));
@@ -90,7 +104,6 @@ class LaravelMaskedDump
 
     protected function dumpTableData(TableDefinition $table, Closure $writer)
     {
-
         $queryBuilder = $this->definition->getConnection()
             ->table($table->getDoctrineTable()->getName());
 
@@ -128,5 +141,20 @@ class LaravelMaskedDump
                 return $name;
             }
         }
+    }
+
+    public function dumpDBSchemaViaMysqldump($writer)
+    {
+        $configs = $this->definition->getConnection()->getConfig();
+        $host = $configs['host'] ?? '';
+        $database = $configs['database'] ?? '';
+        $username = $configs['username'] ?? '';
+        $password = $configs['password'] ?? '';
+
+        $dir = sprintf('/tmp/%s.schema.sql', $database);
+        exec("mysqldump --user={$username} --password={$password} --host={$host} {$database} --result-file={$dir} 2>&1", $output);
+
+        $writer(file_get_contents($dir));
+        unlink($dir);
     }
 }
