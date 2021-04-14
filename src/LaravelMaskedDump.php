@@ -35,7 +35,7 @@ class LaravelMaskedDump
             if ($table->shouldDumpData()) {
                 $writer($this->lockTable($tableName));
 
-                $writer($this->dumpTableData($table));
+                $this->dumpTableData($table, $writer);
 
                 $writer($this->unlockTable($tableName));
             }
@@ -86,9 +86,8 @@ class LaravelMaskedDump
             "UNLOCK TABLES;" . PHP_EOL;
     }
 
-    protected function dumpTableData(TableDefinition $table)
+    protected function dumpTableData(TableDefinition $table, Closure $writer)
     {
-        $query = '';
 
         $queryBuilder = $this->definition->getConnection()
             ->table($table->getDoctrineTable()->getName());
@@ -96,25 +95,21 @@ class LaravelMaskedDump
         $table->modifyQuery($queryBuilder);
 
         $queryBuilder->get()
-            ->each(function ($row, $index) use ($table, &$query) {
+            ->each(function ($row, $index) use ($table, &$query, $writer) {
                 $row = $this->transformResultForInsert((array) $row, $table);
                 $tableName = $table->getDoctrineTable()->getName();
 
-                $query .= "INSERT INTO `${tableName}` (`" . implode('`, `', array_keys($row)) . '`) VALUES ';
-                $query .= "(";
+                $writer("INSERT INTO `${tableName}` (`" . implode('`, `', array_keys($row)) . '`) VALUES (');
 
                 $firstColumn = true;
                 foreach ($row as $value) {
                     if (!$firstColumn) {
-                        $query .= ", ";
+                        $writer(", ");
                     }
-                    $query .= $value;
+                    $writer($value);
                     $firstColumn = false;
                 }
-
-                $query .= ");" . PHP_EOL;
+                $writer(");" . PHP_EOL);
             });
-
-        return $query;
     }
 }
