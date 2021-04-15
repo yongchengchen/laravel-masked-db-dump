@@ -39,8 +39,10 @@ class LaravelMaskedDump
         $overallTableProgress = $this->output->createProgressBar(count($tables));
 
         if ($this->useMysqldump) {
-            $this->dumpDBSchemaViaMysqldump();
+            $this->dumpDBSchemaViaMysqldump($writer);
         }
+
+        $writer('SET FOREIGN_KEY_CHECKS=0;');
 
         foreach ($tables as $tableName => $table) {
             if (!$this->useMysqldump) {
@@ -58,6 +60,8 @@ class LaravelMaskedDump
 
             $overallTableProgress->advance();
         }
+
+        $writer('SET FOREIGN_KEY_CHECKS=1;');
     }
 
     protected function transformResultForInsert($row, TableDefinition $table)
@@ -152,7 +156,7 @@ class LaravelMaskedDump
         $password = $configs['password'] ?? '';
 
         $dir = sprintf('/tmp/%s.schema.sql', $database);
-        exec("mysqldump --user={$username} --password={$password} --host={$host} {$database} --result-file={$dir} 2>&1", $output);
+        exec("mysqldump --user={$username} --password={$password} --host={$host} {$database} --no-data --lock-tables=false --result-file={$dir} 2>&1", $output);
 
         $writer(file_get_contents($dir));
         unlink($dir);
