@@ -114,19 +114,29 @@ class LaravelMaskedDump
         $table->modifyQuery($queryBuilder);
         $tableName = $table->getDoctrineTable()->getName();
         if ($queryBuilder->exists()) {
-            $writer("INSERT INTO `${tableName}` VALUES");
+            $lineLength = 0;
             $this->firstRow = true;
-            $queryBuilder->chunkById(500, function ($chunk) use ($table, $writer) {
+            $queryBuilder->chunkById(500, function ($chunk) use ($table, $writer, $tableName, &$lineLength) {
                 foreach ($chunk as $item) {
+                    if ($lineLength == 0) {
+                        $writer("INSERT INTO `${tableName}` VALUES");
+                    }
+
                     $row = $this->transformResultForInsert((array) $item, $table);
                     if (!$this->firstRow) {
                         $writer(",");
                     } else {
                         $this->firstRow = false;
                     }
-                    $writer("(");
-                    $writer(implode(',', array_values($row)));
-                    $writer(")");
+                    $str = "(" . implode(',', array_values($row)) . ")";
+                    $writer($str);
+
+                    $lineLength += strlen($str);
+                    if ($lineLength > 15000) {
+                        $lineLength = 0;
+                        $this->firstRow = true;
+                        $writer(';' . PHP_EOL);
+                    }
                 }
             }, $this->getPrimary($table->getDoctrineTable()));
 
@@ -149,6 +159,7 @@ class LaravelMaskedDump
 
     public function dumpDBSchemaViaMysqldump($writer)
     {
+        return;
         $configs = $this->definition->getConnection()->getConfig();
         $host = $configs['host'] ?? '';
         $database = $configs['database'] ?? '';
