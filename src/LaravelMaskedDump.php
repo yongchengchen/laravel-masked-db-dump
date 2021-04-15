@@ -159,7 +159,6 @@ class LaravelMaskedDump
 
     public function dumpDBSchemaViaMysqldump($writer)
     {
-        return;
         $configs = $this->definition->getConnection()->getConfig();
         $host = $configs['host'] ?? '';
         $database = $configs['database'] ?? '';
